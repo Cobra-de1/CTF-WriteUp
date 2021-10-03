@@ -36,7 +36,7 @@ Just puts the Name
 
 ![](/2021/DownUnderCTF2021/Babygame/Images/7.png)
 
-The NAME and RANDBUF variable are global variable, and it located on bss setion. NAME array is 32 characters and the pointer randbuf right after it. So look again to the code. The fread function at main will allow us to input maximum 32 character, and it NOT push the null byte in the end. So it make the randbuf pointer leakable. And after that, the print_username will give us the value of randbuf, with a pointer to string ‘/dev/urandom’ in ELF file. And also the Edit username allow us to change that pointer (because strlen(NAME) will stop with null byte, so the size we fread can be 32 + size(RANDBUF) ).
+The NAME and RANDBUF variable are global variable, and it located on bss setion. NAME array is 32 characters and the pointer randbuf right after it. So look again to the code. The fread function at main will allow us to input maximum 32 character, and it NOT push the null byte in the end. So it make the randbuf pointer leakable. And after that, the print_username will give us the value of randbuf, which is a pointer to string ‘/dev/urandom’ in ELF file. And also the Edit username allow us to change that pointer (because strlen(NAME) will stop with null byte, so the size we fread can be 32 + size(RANDBUF) ).
 
 ![](/2021/DownUnderCTF2021/Babygame/Images/8.png)
 
