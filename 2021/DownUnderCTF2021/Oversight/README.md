@@ -1,34 +1,34 @@
 # Oversight
 
-![](/2021/DownUnderCTF2021/Oversight/Images/1.png)
+![](/2021/DownUnderCTF2021/Oversight/images/1.png)
 
 Challenge give me ELF file oversight and libc-2.27.so
 
-![](/2021/DownUnderCTF2021/Oversight/Images/2.png)
+![](/2021/DownUnderCTF2021/Oversight/images/2.png)
 
 Let reverse it
 
-![](/2021/DownUnderCTF2021/Oversight/Images/3.png)
+![](/2021/DownUnderCTF2021/Oversight/images/3.png)
 
 The main function, do nothing but call `wait()`
 
-![](/2021/DownUnderCTF2021/Oversight/Images/4.png)
+![](/2021/DownUnderCTF2021/Oversight/images/4.png)
 
 `wait()` function, get 5 byte of us, convert to num and leak the stack base address. The format string vul is converted to only leak, no overwrite. 
 
-![](/2021/DownUnderCTF2021/Oversight/Images/5.png)
+![](/2021/DownUnderCTF2021/Oversight/images/5.png)
 
 `introduce()` do nothing
 
-![](/2021/DownUnderCTF2021/Oversight/Images/6.png)
+![](/2021/DownUnderCTF2021/Oversight/images/6.png)
 
 `Get_num_bytes()` function, read 4 byte input and convert to num, compare with 0x100, I have checked the interger overflow (-1) and it can not bypass.
 
-![](/2021/DownUnderCTF2021/Oversight/Images/7.png)
+![](/2021/DownUnderCTF2021/Oversight/images/7.png)
 
 Echo function create array length 256 and call `echo_innert()`
 
-![](/2021/DownUnderCTF2021/Oversight/Images/8.png)
+![](/2021/DownUnderCTF2021/Oversight/images/8.png)
 
 The last function is `echo_inner()`, and luckily, we found the bug
 
@@ -40,7 +40,7 @@ It happen because the instruction `leave` is the compare of 2 instruction `mov r
 
 For example, let look the stack before the `fread()` call in echo_inner
 
-![](/2021/DownUnderCTF2021/Oversight/Images/9.png)
+![](/2021/DownUnderCTF2021/Oversight/images/9.png)
 
 The white part is the array v2 in `echo`, the rbp of `echo_inner` is 0x7fffffffdca0 and the rbp of `echo` is 0x00007fffffffdda0. 
 
@@ -48,13 +48,13 @@ Notice that we are in the echo_inner function now, but the array causing the ove
 
 Oke, see what happen if we input which 256 ‘A’
 
-![](/2021/DownUnderCTF2021/Oversight/Images/10.png)
+![](/2021/DownUnderCTF2021/Oversight/images/10.png)
 
 You can see that last byte at 0x00007fffffffdda0 change to \x00 and now rbp point to somewhere on v2 array (with we can control data on it)
 
 Continue to the return of `echo`, after `leave` instructions
 
-![](/2021/DownUnderCTF2021/Oversight/Images/11.png)
+![](/2021/DownUnderCTF2021/Oversight/images/11.png)
 
 Rbp now point to 0x7fffffffdd00, and rsp is 0x7fffffffdda8, is the return address to `get_num_bytes` funtions, ret instruction call and we go back to `get_num_bytes`.
 
@@ -64,7 +64,7 @@ The rbp is 0x7fffffffdd00 so the stack will 0x7fffffffdd00 same, and after `pop 
 
 See the stack for more understand
 
-![](/2021/DownUnderCTF2021/Oversight/Images/12.png)
+![](/2021/DownUnderCTF2021/Oversight/images/12.png)
 
 What we push in the white part will be our rop chain.
 
@@ -74,7 +74,7 @@ What we push in the white part will be our rop chain.
 
   - We will leak libc base at the return address of main, the value is `<__libc_start_main + 231>` , it depend on version libc they gived (2.27).
 
-![](/2021/DownUnderCTF2021/Oversight/Images/13.png)
+![](/2021/DownUnderCTF2021/Oversight/images/13.png)
 
 ## Final exploit
 
@@ -87,11 +87,11 @@ What we push in the white part will be our rop chain.
 
 There is a small problem here, although the last 1.5 bytes of the stack address are fixed, it depends on the environment variables. For example, an application running at `/home/cobra/Desktop/` and an application running at `/home/cobra/Desktop/DuCTF/` will have a different stack address, although the last 1.5 bytes it will not change each run time. So if you want to use a full rop chain like `pop_rdi, /bin/sh, system`. You'll need to bruteforce a little bit to get the correct placement in the v2. Because the stack while running on remote server will be different in environment variables than running locally. But at this challange, I use one_gadget so no need to bruteforce.
 
-![](/2021/DownUnderCTF2021/Oversight/Images/14.png)
+![](/2021/DownUnderCTF2021/Oversight/images/14.png)
 
 We have 3 one_gadget, I used the first gadget, because it so hard to control value [rsp + 0x70] or [rsp + 0x30]. The condition rsp & 0xf == 0 is always true, because we have overwrite rbp == 0, then pop rbp, and ret will pop rsp 2 time, so it meets the condition. Register rcx == 0 will also always succeed, when calling printf() it calls the instructions mov rcx, rax and since eax has been xor before, rcx will be assigned = 0 after printf execution, i don’t know why printf need that instruction LOL.
 
-![](/2021/DownUnderCTF2021/Oversight/Images/15.png)
+![](/2021/DownUnderCTF2021/Oversight/images/15.png)
 
 So we have all thing to have a payload, just fill 256 byte of v2 by 32 address of one_gadget
 
@@ -123,7 +123,7 @@ s.sendline(payload)
 s.interactive()
 ```
 
-![](/2021/DownUnderCTF2021/Oversight/Images/16.png)
+![](/2021/DownUnderCTF2021/Oversight/images/16.png)
 
 `flag: DUCTF{1_sm@LL_0ver5ight=0v3rFLOW}`
 
