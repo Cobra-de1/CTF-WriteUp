@@ -1,16 +1,16 @@
 # Leaking like a sieve
 
-![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/Images/1.png)
+![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/images/1.png)
 
 Another easy pwn challenge of DownUnderCTF 2021
 
 Check the ELF
 
-![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/Images/2.png)
+![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/images/2.png)
 
 Use IDA to reverse
 
-![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/Images/3.png)
+![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/images/3.png)
 
 The program read the flag in `flag.txt` and store it in s buffer, locate at rsp + 0x30
 
@@ -46,7 +46,7 @@ s.close()
 print(flag)
 ```
 
-![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/Images/4.png)
+![](/2021/DownUnderCTF2021/Leaking_like_a_sieve/images/4.png)
 
 `flag: DUCTF{f0rm4t_5p3c1f13r_m3dsg!}`
 
