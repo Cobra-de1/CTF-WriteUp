@@ -13,3 +13,4 @@
   - dubblesort
   - hacknote
   - Silver Bullet
+  - re-alloc
