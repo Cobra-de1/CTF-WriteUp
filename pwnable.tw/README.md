@@ -14,3 +14,4 @@
   - hacknote
   - Silver Bullet
   - re-alloc
+  - applestore
