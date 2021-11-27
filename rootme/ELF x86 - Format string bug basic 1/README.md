@@ -28,7 +28,7 @@ Một điều khiến mình cực kì khó chịu ở hệ thống rootme là kh
 
 Nhập vào chuỗi 
 
-```console
+```bash
 ./ch5 %x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x 
 ```
 
