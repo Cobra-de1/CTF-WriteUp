@@ -96,7 +96,7 @@ GetEnv() {
 }
 ```
 
-Đại khái là khi hàm con trả về một struct, chương trình copy struct ra một vùng nhớ tạm khác rồi khi về lại hàm cha, tiến hành copy lại struct từ vùng nhớ tạm vào biến trên hàm main. Địa chỉ vùng nhớ tạm được copy được hàm cha đặt là tham số đầu tiên của hàm.
+Đại khái là khi hàm con trả về một struct, chương trình copy struct ra một vùng nhớ tạm khác rồi khi về lại hàm cha, tiến hành copy lại struct từ vùng nhớ tạm vào biến trên hàm `main`. Địa chỉ vùng nhớ tạm được copy được hàm cha đặt là tham số đầu tiên của hàm.
 
 Như vậy ta sẽ đổi cách tấn công một chút, thay vì ta đè return address lên địa chỉ shellcode là biến `struct env` ở hàm `main`, ta có thể sửa `return address` và địa chỉ vùng nhớ tạm tại `ebp + 0x8` giống nhau. Như vậy chương trình sẽ copy struct ra một vùng nhớ trên stack và return về đó luôn, đảm bảo chính xác.
 
