@@ -34,7 +34,7 @@ Vì bài này là một bài mình đánh giá ở mức độ medium-hard (đ�
   
   - Tấn công `tcache_pthread_struct`, tạo và free 7 chunk tại 1 offset nào đó, sau đó tạo tiếp một fakechunk nằm trong `tcache_pthread_struct`, và đặt địa chỉ của nó tại một offset nào đó, cấp phát và free để fakechunk vừa tạo được đưa vào unsorted bin, lúc này `fakechunk->fd` là một địa chỉ thuộc libc và nó đang nằm trên một offset của `tcache_pthread_struct`, tiến hành malloc đúng size đó là ta có thể malloc vào một vùng nhớ trong libc.
   
-  - Tấn công FSOP, thay đổi 2 byte cuối của libc address thành stdout (1/16 cơ hội thành công), tiến hành leak libc.
+  - Tấn công FSOP, thay đổi 2 byte cuối của địa chỉ unsorted-bin thành stdout (1/16 cơ hội thành công), tiến hành leak libc.
   
   - Tấn công FSOP lần nữa để lấy shell.
   
