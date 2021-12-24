@@ -25,6 +25,10 @@ Vì bài này là một bài mình đánh giá ở mức độ medium-hard (đ�
   - Các con trỏ nằm tại `tcache_pthread_struct` không bị mã hóa => chuyển tấn công FSOP lên `tcache_pthread_struct`
   
   - malloc_hook, free_hook, realloc_hook đều bị bỏ trên libc 2.34
+
+## FSOP (File-Stream Oriented Programing)
+
+Các bạn nên tham khảo từ angelboy [https://nightrainy.github.io/2019/08/07/play-withe-file-structure-%E6%90%AC%E8%BF%90/](https://nightrainy.github.io/2019/08/07/play-withe-file-structure-%E6%90%AC%E8%BF%90/)
   
 ## Tóm tắt solution
 
