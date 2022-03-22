@@ -1,8 +1,12 @@
 # Modern Rome
 
+![](images/1.png)
+
 Đề cung cấp cho ta file binary và source code.
 
 Kiểm tra file binary
+
+![](images/2.png)
 
 Source code được viết ở ngôn ngữ c++.
 
@@ -120,5 +124,7 @@ s.sendlineafter(b'val: ', b'M' * 4 + b'C' * 8 + b'X' * 5 + b'I' * 4)
 
 s.interactive()
 ```
+
+![](images/3.png)
 
 Flag: `zer0pts{R0me_w1ll_3x1st_a5_1on9_4s_th3_Col1s3um_d0es}`
