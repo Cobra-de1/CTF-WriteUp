@@ -73,7 +73,7 @@ Tác giả cũng đã cung cấp đường dẫn file `flag` trong hàm `win`, n
 
 Trong cuộc thi thì mình làm theo cách cơ bản, nhưng nếu bài không bị lỗi thì mình nghĩ cũng sẽ không quá khó, sau khi leak được libc address, ta có thể build một ROPchain đầy đủ. Có thể dùng `retf` và `int0x80` để gọi các syscall ở x86.
 
-Đây là exploit code mình dùng để giải.
+## Exploit
 
 ```python
 #
