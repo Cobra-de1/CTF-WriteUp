@@ -4,9 +4,9 @@
 
 ## Checksec
 
-
-
 Full protection 
+
+![image](https://user-images.githubusercontent.com/57558487/196599738-93c5f831-f068-43b5-a5b5-b7cebf3fdb7e.png)
 
 ## Reverse
 
@@ -112,13 +112,166 @@ int add()
 Mình rất thường hay phân tích hàm `add` khi vào các bài heap trước. Vì nó sẽ cho chúng ta cái nhìn tổng quát về cấu trúc dữ liệu mà chương trình dùng.
 Ở đây cấu trúc dữ liệu  chương trình sẽ như sau:
 
+![image](https://user-images.githubusercontent.com/57558487/196600775-a337ac7b-4ecf-4edb-a82d-27272bcab8d5.png)
 
+Chương trình có một mảng `gNotes` chứa tối đa 16 node. Struct node có size 0x20, và 0x10 byte đầu dùng để chưa `name` được generate ngẫu nhiên mỗi khi tạo node, qword tiếp theo chưa pointer đến vùng được cấp phát bởi `mmap()` với maxsize là 0x2000. Các vùng nhớ mmap sẽ có permission là read/write. Và một mảng `gSize` dùng để chứa độ dài của vùng mmap của mỗi node dùng để thao tác ở các hàm sau: `edit`, `delete`. Một symbols là `qword_4090` được ida tạo ra để tính toán offset đến các pointer trong một struct thôi, để các bạn khỏi nhầm lẫn :v.
 
-Và nếu bạn tinh ý hay có chút kinh nghiệm, dễ dàng nhận ra được bug trong hàm này, đó là nếu như ta nhập một giá trị > 0x2000 vào `gSize` của một node. Hàm sẽ thoát ngay nhưng vẫn lưu giá trị đó ở trong `gSize`, tức là ta có thể sửa size của một note bất kì để tạo ra lỗi buffer overflow.
+Và nếu bạn tinh ý hay có chút kinh nghiệm, dễ dàng nhận ra được bug trong hàm này, đó là nếu như ta nhập một giá trị > 0x2000 vào `gSize` của một node. Hàm sẽ thoát ngay nhưng vẫn lưu giá trị đó ở trong `gSize`, tức là nếu trong các hàm khác có sử dụng giá trị `gSize` này để thao tác với các node. ta có thể lợi dụng sửa size của một note bất kì để tạo ra lỗi buffer overflow.
 
-flow như sau: `add(0, 0x2000)` -> `add(0, 0x5000)` sẽ tạo ra node ở index 0 với size thật là 0x2000 và size ở `gSize` là 0x5000. Lúc này ta có thể lợi dụng các hàm phía sau như `edit` hay `delete` 
+Flow như sau: `add(0, 0x2000)` -> `add(0, 0x5000)` sẽ tạo ra node ở index 0 với size thật là 0x2000 và size ở `gSize` là 0x5000. Lúc này ta có thể lợi dụng các hàm phía sau như `edit` hay `delete` để tấn công buffer overflow.
 
 ### Hàm `edit`
+
+```c
+int edit()
+{
+  unsigned int v1; // [rsp+Ch] [rbp-4h] BYREF
+
+  v1 = 0;
+  printf("Index: ");
+  __isoc99_scanf("%u%*c", &v1);
+  if ( v1 > 0xF )
+    return puts("Invalid index!");
+  if ( !qword_4090[4 * v1] || !gSize[v1] )
+    return puts("This note is empty.");
+  printf("Write your new note: ");
+  readline(qword_4090[4 * v1], gSize[v1]);
+  return puts("Done!");
+}
+```
+
+Hàm edit dựa vào pointer ở mỗi struct và `gSize` ở struct đó để gọi lại hàm `readline()` nhập input vào. ta có thể confirm lỗi buffer overflow nếu kết hợp với lỗi ở hàm `add` phía trên.
+
+### Hàm `readline`
+
+```c
+__int64 __fastcall readline(__int64 a1, unsigned int a2)
+{
+  __int64 result; // rax
+  int v3; // eax
+  unsigned __int8 buf; // [rsp+1Bh] [rbp-5h] BYREF
+  unsigned int v5; // [rsp+1Ch] [rbp-4h]
+
+  buf = 0;
+  v5 = 0;
+  while ( 1 )
+  {
+    result = v5;
+    if ( v5 >= a2 )
+      break;
+    read(0, &buf, 1uLL);
+    result = buf;
+    if ( buf == 10 )
+      break;
+    v3 = v5++;
+    *(_BYTE *)(a1 + v3) = buf;
+  }
+  return result;
+}
+```
+
+Hàm này đơn giản là gọi `read` từng byte một cho đến khi đủ số lượng hoặc gặp byte '\n', lúc đấy hàm sẽ thay byte '\n' bằng '\x00', ta cần lưu ý điều này, nếu ta không muốn chuỗi ta nhập kết thúc bằng NULL byte, ta cần điều chỉnh chính xác độ dài của mảng.
+
+### Hàm `show`
+
+```c
+int show()
+{
+  unsigned int v1; // [rsp+4h] [rbp-Ch] BYREF
+  unsigned int i; // [rsp+8h] [rbp-8h]
+  int v3; // [rsp+Ch] [rbp-4h]
+
+  v1 = 0;
+  v3 = 0;
+  puts("These are the notes you have created so far:");
+  for ( i = 0; (int)i <= 15; ++i )
+  {
+    if ( qword_4090[4 * (int)i] )
+    {
+      printf("%d. %s\n", i, (const char *)&gNotes + 32 * (int)i);
+      v3 = 1;
+    }
+  }
+  if ( !v3 )
+    return puts("No note found!");
+  printf("Which one to open? ");
+  __isoc99_scanf("%u%*c", &v1);
+  if ( v1 > 0xF )
+    return puts("Invalid index!");
+  if ( qword_4090[4 * v1] && gSize[v1] )
+    return printf("Content of note %s:\n%s", (const char *)&gNotes + 32 * v1, (const char *)qword_4090[4 * v1]);
+  return puts("This note is empty.");
+}
+```
+
+Hàm show đơn giản là in ra giá trị của `name` và `buffer` ta chọn, chú ý hàm sử dụng `printf("%s")`, tức là chuỗi sẽ kết thúc nếu gặp NULL byte trong mảng.
+
+### Hàm `delete`
+
+```c
+int delete()
+{
+  unsigned int *v0; // rax
+  unsigned int v2; // [rsp+Ch] [rbp-4h] BYREF
+
+  v2 = 0;
+  printf("Index: ");
+  __isoc99_scanf("%u%*c", &v2);
+  if ( v2 <= 0xF )
+  {
+    if ( *((_QWORD *)&qword_4090 + 4 * v2) && gSize[v2] )
+    {
+      munmap(*((void **)&qword_4090 + 4 * v2), gSize[v2]);
+      memset((char *)&gNotes + 32 * v2, 0, 0x20uLL);
+      v0 = gSize;
+      gSize[v2] = 0;
+    }
+    else
+    {
+      LODWORD(v0) = puts("This note is empty.");
+    }
+  }
+  else
+  {
+    LODWORD(v0) = puts("Invalid index!");
+  }
+  return (int)v0;
+}
+```
+
+Hàm này không có lỗi gì đặc biệt, nếu kết hợp với lỗi ở hàm `add`, ta có thể `munmap` một mảng lớn hơn độ dài mảng thật, từ đó có thể overlap chunk hay làm gì gì đó, tuy nhiên mình chưa nghĩ ra hướng nào để exploit sử dụng hàm này, và trong cách làm của mình cũng không có dùng đến hàm này.
+
+## Thinking
+
+Sau khi phân tích kĩ các điều trên, với việc target của mình là leak được một địa chỉ và `canary`, mình nghĩ ngay đến `thread local storage (tls)`
+
+### tls section
+
+Các bạn có thể search gg để hiểu thêm nhé, mình chỉ tóm tắt một vài ý chính. `tls` section chứa thông tin về một thread đang chạy trong chương trình, mỗi thread (kể cả main thread) đều có một vùng `tls` trên memory, và với các libc mới mình quen thuộc thì nó luôn nằm ngay phía trên vùng nhớ dành cho `libc`. Từ đó nếu ta leak được một offset thuộc `tls`, ta có thể tìm được libc address và ngược lại. 
+
+Ở trên `tls`, các target phổ biến nhất mình hay nghĩ đến là `canary`, nằm ở offset `fs:0x28`, các bạn có thể dùng gdb và type `x/10xg $fs_base` để tìm ra vùng nhớ ở `tls section`
+
+![image](https://user-images.githubusercontent.com/57558487/196603277-096c5eab-c364-49c1-ab14-7cbbffdcfa1a.png)
+
+Một lí do nữa mình nghĩ đến `tls` đó là vì mình đã có kinh nghiệm gặp một vài bài tương tự, và đọc ở link [này](https://github.com/Naetw/CTF-pwn-tips) mình biết rằng nếu `malloc(0x21000)` thì chương trình sẽ gọi hàm `mmap()` và cấp cho một chunk nằm ngay trên nó.
+
+### Allocate and get the offset
+
+Tuy nhiên vấn đề ở đây là maxsize ta có thể `mmap` là 0x2000, nhỏ hơn rất nhiều, và khi mình chạy thử thì nó cấp ở phân vùng nằm giữa ld chứ không phải ở trên `tls`. Tuy nhiên mình đoán là nếu ta `mmap` đủ số lần và lấp hết khoảng cách giữa 2 ld. Vùng nhớ tiếp theo cấp phát sẽ nằm ngay trên `tls` như ta cần.
+
+![image](https://user-images.githubusercontent.com/57558487/196604702-bb0f5610-1fa7-4251-92bf-fd48fc27ff1e.png)
+
+Kết quả là: 
+
+![image](https://user-images.githubusercontent.com/57558487/196605709-643f0e9e-dedd-4916-9aef-acd322dfff38.png)
+
+Ta có được một vùng nhớ với offset đến `$fs_base` là 0x4740, tuyệt vì ta có thể dùng nó để tấn công tiếp theo.
+
+### Leaking and Fixxing bug
+
+Vì chúng ta cần leak một địa chỉ và `canary`, nên ở đây mình chọn 
+
+### Sync with server side
 
 ## Exploit
 
