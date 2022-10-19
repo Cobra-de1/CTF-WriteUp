@@ -65,7 +65,7 @@ __int64 __fastcall sub_1242(__int64 a1, __int64 a2)
 
 Hàm này cơ chế hoạt động đơn giản, 4 byte đầu của input được chuyển thành số và store vào 4 byte đầu của struct, 4 byte tiếp theo map vào 4 byte tiếp theo của struct, cuối cùng 0x30 byte còn lại được memcpy vào một struct 0x30 được malloc trên heap.
 
-Đến đây thì sẽ hơi khó hiểu cho người, dựa theo tính năng của chương trình đại loại là struct này mình sẽ mô hình hóa lại tương tự như sau:
+Đến đây thì sẽ hơi khó hiểu, dựa theo tính năng của chương trình, struct này mình sẽ mô hình hóa lại tương tự như sau:
 
 ```c
 struct note {
